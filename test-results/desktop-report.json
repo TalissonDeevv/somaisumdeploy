@@ -1,0 +1,19 @@
+{
+  "result": "passed",
+  "executablePath": "C:\\Users\\Pichau\\.codex\\games\\so-mais-um-deploy\\release\\win-unpacked\\Só Mais Um Deploy.exe",
+  "profile": "C:\\Users\\Pichau\\AppData\\Local\\Temp\\deploy-smoke-srs7Q3",
+  "checks": [
+    "Local file loading",
+    "Isolated sandbox / no renderer Node",
+    "Logo and procedural Byte rig",
+    "Office interaction",
+    "Mission 1 blocks and tests",
+    "Delivery unlocks mission 2",
+    "Two lessons and one extra experiment",
+    "230 XP unlocks workshop",
+    "Room and progress survive application relaunch",
+    "No HTTP requests"
+  ],
+  "errors": [],
+  "network": []
+}
