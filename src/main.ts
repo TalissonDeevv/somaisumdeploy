@@ -2,10 +2,12 @@ import Phaser from 'phaser';
 import './style.css';
 import './v3/style.css';
 import { V3Controller } from './v3/controller';
-import { chapterObjective } from './v3/events';
-import { releaseNotes } from './v3/content';
+import { chapterObjective, guestCall, guestStage, talissonCall, type GuestId } from './v3/events';
+import { cast, releaseNotes } from './v3/content';
+import { activityIds } from './v3/types';
 import { OfficeScene, type ObjectId } from './game/OfficeScene';
 import { GameAudio } from './game/audio';
+import { characterPortrait, characterStanding, type CharacterId } from './game/CharacterPixels';
 import { missions, blocks, initialProgram } from './core/missions';
 import { evaluate, logLines } from './core/validation';
 import { SaveStore, freshProgress, completeMission } from './core/state';
@@ -50,7 +52,7 @@ function renderHud() {
   $('#hud').innerHTML = `<header class="hud-header"><div class="wordmark"><span class="terminal-icon">&gt;_</span><div>SÓ MAIS UM <b>DEPLOY</b><small>UM JOGO DE TALISSON SOUZA</small></div></div>
     <div class="mission-status">${tag(progress.current === 5 ? 'FEIRA CONECTA · NO AR' : `PROJETO FEIRA CONECTA · ${progress.current + 1}/5`)}<strong>${progress.current === 5 ? 'Entrega feita. Café merecido.' : m.title}</strong></div>
     <nav aria-label="Menu do jogo">${btn('Modos', 'v3-modes', 'quiet')}${btn('Caderno', 'v3-notebook', 'quiet')}${btn('Aprender', 'lessons', 'quiet')}${btn('Experimentos','academy','quiet')}${btn('Ⅱ <span class="wide">Pausar</span>', 'pause', 'quiet')}</nav></header>
-    ${started ? `<div class="room-caption">${tag(rooms[progress.room].name.toUpperCase())}<span>Byte · ${info.rank} · ${{story:'História',lab:'Laboratório',challenges:'Desafios'}[progress.v3.mode]}</span><div class="room-tools">${btn('Mapa','map','quiet')}${btn('Perfil','profile','quiet')}${btn('Controles','v3-controls','quiet')}</div></div><div class="xp-widget">${btn(`NV. ${info.level} <span>${info.xp} XP</span>`,'profile','quiet')}<div class="xp-track"><i style="width:${info.ratio*100}%"></i></div><small>${info.next?`${info.next-info.xp} XP para o próximo nível`:'Nível máximo · continue criando'}</small></div>` : ''}
+    ${started ? `<div class="room-caption">${tag(rooms[progress.room].name.toUpperCase())}<span>Byte · ${info.rank} · ${{story:'História',lab:'Laboratório',challenges:'Desafios'}[progress.v3.mode]}</span>${talissonCall(progress)&&progress.room!==0&&progress.room!==5?'<span class="npc-chip">! Talisson está te chamando</span>':''}<div class="room-tools">${btn('Mapa','map','quiet')}${btn('Perfil','profile','quiet')}${btn('Controles','v3-controls','quiet')}</div></div><div class="xp-widget">${btn(`NV. ${info.level} <span>${info.xp} XP</span>`,'profile','quiet')}<div class="xp-track"><i style="width:${info.ratio*100}%"></i></div><small>${info.next?`${info.next-info.xp} XP para o próximo nível`:'Nível máximo · continue criando'}</small></div>` : ''}
     <footer class="hud-footer"><div class="key-guide"><kbd>${safe([progress.settings.bindings.up,progress.settings.bindings.left,progress.settings.bindings.down,progress.settings.bindings.right].join(' ').toUpperCase())}</kbd><span>ou setas · mover</span><kbd>${safe(progress.settings.bindings.interact.toUpperCase())}</kbd><span>interagir</span><kbd>Esc</kbd><span>fechar</span></div><div id="interaction">${nearby ? `<kbd>${safe(progress.settings.bindings.interact.toUpperCase())}</kbd> ${safe(nearby)}` : 'Aproxime-se dos objetos para interagir'}</div><span class="save-status" role="status">${store.error ? safe(store.error) : started ? '◇ Salvo neste dispositivo' : 'SEM PRESSA. SEM PRAZO REAL.'}</span></footer>`;
   $('#hud').classList.toggle('hidden', !started);
   $('.key-guide').classList.toggle('hidden',!progress.settings.showControls);
@@ -75,7 +77,7 @@ function menu() {
   v3.stop();started = false; renderHud();officeScene.home(true);
   modal('menu', `<div class="menu-backdrop"></div><main class="title-menu"><div class="beta-line"><span class="beta-badge">BETA</span><span>v${__APP_VERSION__}</span></div><img class="game-logo" src="./assets/logo.png" alt="Só Mais Um Deploy">
     <p class="beta-message">Um jogo em construção, uma comunidade cheia de ideias. Explore a versão beta e ajude a criar os próximos capítulos do Byte.</p>
-    ${saved?`<p class="resume-caption"><strong>${saved.current<5?missions[saved.current].title:'Feira Conecta entregue'}</strong><small>${safe(chapterObjective(saved))}</small><span>${saved.current}/5 missões · ${saved.v3.activityCompleted.length}/6 novas atividades</span></p>`:''}
+    ${saved?`<p class="resume-caption"><strong>${saved.current<5?missions[saved.current].title:'Feira Conecta entregue'}</strong><small>${safe(chapterObjective(saved))}</small><span>${saved.current}/5 missões · ${saved.v3.activityCompleted.length}/${activityIds.length} novas atividades</span></p>`:''}
     <div class="menu-buttons">${saved?btn('Continuar →','continue','primary'):''}${btn('Nova jornada ↗','new',saved?'':'primary')}${btn('Personagens','v3-characters')}${btn('Modos de jogo','v3-modes','',saved?'':'disabled')}${btn('Configurações','settings')}${btn('Créditos','credits')}</div>
     <details class="local-news"><summary>Nesta versão</summary><ul>${releaseNotes.map(n=>`<li>${n}</li>`).join('')}</ul></details>
     ${store.error?`<p class="notice">${safe(store.error)}</p>`:''}<small class="menu-credit">AUTORIA · TALISSON SOUZA</small></main>
@@ -87,6 +89,17 @@ function newGame() {
 }
 function beginNew() {
   progress = freshProgress(progress.settings); started = true; drafts.clear();officeScene.home(false); officeScene.switchRoom(0); persist();v3.intro();
+}
+let castSelected='talisson';
+function characters(){
+  const portraitOf=(id:string,big:boolean)=>id==='byte'?`<img class="npc-portrait byte-portrait" src="./assets/personagem.png" alt="Byte">`:big?characterStanding(id as CharacterId):characterPortrait(id as CharacterId);
+  const person=cast.find(c=>c.id===castSelected)!,guest=person.id==='luiz'||person.id==='indo'?person.id as GuestId:null;
+  const status=guest?{start:'Missão disponível',progress:'Missão em andamento',ready:'Correção pronta, falta apresentar',done:'✓ Missão concluída'}[guestStage(saved&&!started?saved:progress,guest)]:'';
+  modal('characters',`<div class="content character-gallery">${tag('ELENCO · SÓ MAIS UM DEPLOY')}<h1 id="dialog-title">Personagens</h1><div class="cast-roster" role="tablist" aria-label="Personagens do jogo">${cast.map(c=>`<button role="tab" aria-selected="${c.id===castSelected}" class="${c.id===castSelected?'selected':''}" data-action="character-view-${c.id}">${portraitOf(c.id,false)}<span>${safe(c.name)}</span></button>`).join('')}</div><article class="cast-detail" role="tabpanel"><div class="cast-figure">${portraitOf(person.id,true)}</div><div>${tag(person.role.toUpperCase())}<h2>${safe(person.name)}</h2><p>${safe(person.bio)}</p><p class="mentor">“${safe(person.quote)}”</p><dl><dt>Missão</dt><dd>${safe(person.mission)}</dd><dt>Conceitos</dt><dd>${safe(person.concepts)}</dd><dt>Onde encontrar</dt><dd>${safe(person.where)}</dd>${status?`<dt>Situação</dt><dd>${status}</dd>`:''}</dl>${guest?btn(status.startsWith('✓')?'Visitar na feira →':'Ir para a missão →','character-go-'+guest,'primary'):''}</div></article>${btn('Voltar',started?'office':'menu')}</div>`,true);
+}
+function goToGuest(id:GuestId){
+  if(!started){progress=structuredClone(saved??freshProgress(progress.settings));started=true;}
+  officeScene.home(false);progress.room=4;officeScene.switchRoom(4);officeScene.placePlayer(id==='luiz'?355:545,400);persist();office();v3.guest(id);
 }
 function message(id: MissionId) {
   activePractice=null;missionId = id; const m = missions[id];
@@ -105,6 +118,10 @@ function interact(id: ObjectId) {
   if(id==='gate'){v3.openActivity('circuit');return;}
   if(id==='vacancies'){v3.openActivity('debug');return;}
   if(id==='demo-door'){travel(5);return;}
+  if(id==='npc-luiz'){v3.guest('luiz');return;}
+  if(id==='npc-indo'){v3.guest('indo');return;}
+  if(id==='orders-terminal'){v3.openActivity('orders');return;}
+  if(id==='budget-board'){v3.openActivity('budget');return;}
   if(id==='seat'){officeScene.react('sit');modal('seat',`<div class="content">${tag('UMA PAUSA NO MUNDO')}<h1 id="dialog-title">O próximo passo pode esperar.</h1><p>Byte se senta por um instante. Seu caderno continua com as descobertas e o próximo objetivo.</p><div class="actions">${btn('Consultar caderno','v3-notebook')}${btn('Levantar e continuar','office','primary')}</div></div>`);return;}
   if(id==='notice'){officeScene.react('examine');modal('notice',`<div class="content">${tag('BILHETE DE RAFA')}<h1 id="dialog-title">Uma feira, muitas pequenas partes.</h1><p>“Byte, Talisson está preparando a demonstração. Noa organiza as entregas e a catraca. O mapa leva você até os estandes.”</p>${btn('Ver destinos','map','primary')}${btn('Guardar e voltar','office','quiet')}</div>`);return;}
   if(id==='npc-noa'){modal('noa',`<div class="content">${tag('NOA / PERSONAGEM FICTÍCIA')}<h1 id="dialog-title">A equipe está de olho.</h1><p>${progress.v3.activityCompleted.includes('circuit')?'A fiação da catraca agora respeita os oito cenários. Já conferiu um caso em que a pessoa tem ingresso, mas não pagou?':'Estou conferindo os estandes. As entregas seguem uma grade, e a catraca precisa de uma regra que bloqueie entradas inválidas. Escolha onde ajudar primeiro.'}</p><div class="actions">${btn('Programar entregas','v3-activity-route','primary')}${btn('Conferir catraca','v3-activity-circuit')}${btn('Voltar','office','quiet')}</div></div>`);return;}
@@ -240,7 +257,7 @@ function lesson(){
 }
 function pause() {
   if (!started) return;
-  v3.stop();modal('pause', `<div class="content">${tag('SEM PRESSA')}<h1 id="dialog-title">Uma pausa no projeto.</h1><p>${safe(chapterObjective(progress))}</p><div class="menu-buttons">${btn('Continuar jogando →','office','primary')}${btn('Quadro de tarefas','board')}${btn('Modos de jogo','v3-modes')}${btn('Caderno do Byte','v3-notebook')}${btn('Configurações','settings')}${btn('Controles e remapeamento','v3-controls')}${btn('Exportar / importar save','v3-saves')}${btn('Comunidade e feedback','v3-community')}${btn('Personalizar escritório','v3-customize')}${btn('Menu inicial','menu','quiet')}</div></div>`);
+  v3.stop();modal('pause', `<div class="content">${tag('SEM PRESSA')}<h1 id="dialog-title">Uma pausa no projeto.</h1><p>${safe(chapterObjective(progress))}</p><div class="menu-buttons">${btn('Personagens','v3-characters')}${btn('Continuar jogando →','office','primary')}${btn('Quadro de tarefas','board')}${btn('Modos de jogo','v3-modes')}${btn('Caderno do Byte','v3-notebook')}${btn('Configurações','settings')}${btn('Controles e remapeamento','v3-controls')}${btn('Exportar / importar save','v3-saves')}${btn('Comunidade e feedback','v3-community')}${btn('Personalizar escritório','v3-customize')}${btn('Menu inicial','menu','quiet')}</div></div>`);
 }
 function continueGame() {
   if (!saved) return;
@@ -261,6 +278,9 @@ function close() {
 document.addEventListener('click', e => {
   const button = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]'); if (!button || button.disabled) return;
   audio.play(); const action = button.dataset.action!;
+  if(action==='v3-characters'){v3.stop();characters();return;}
+  if(action.startsWith('character-view-')){castSelected=action.slice(15);characters();return;}
+  if(action.startsWith('character-go-')){goToGuest(action.slice(13) as GuestId);return;}
   if(action==='v3-modes'&&!started&&saved){progress=structuredClone(saved);started=true;officeScene.home(false);officeScene.switchRoom(progress.room);renderHud();}
   if(v3.handle(action))return;
   const actions: Record<string, () => void> = { new: newGame, 'confirm-new': beginNew, continue: continueGame, office, menu, pause, help, settings, credits, board, ending, close, map,profile,academy,lessons:lessonList,
@@ -328,7 +348,9 @@ window.addEventListener('focus',()=>audio.syncAmbience());
 applySettings();
 const officeScene = new OfficeScene({ blocked: () => screen !== 'office'&&screen!=='dialogue-world', completed: () => progress.current, reducedMotion: () => progress.settings.reducedMotion, interact, nearby: setNearby,
   speed:()=>({relaxed:.75,normal:1,fast:1.35}[progress.settings.moveSpeed]),labels:()=>progress.settings.objectLabels,celebrations:()=>progress.settings.celebrations,
-  progress:()=>progress,bindings:()=>progress.settings.bindings,menu:()=>screen==='menu',cue:name=>audio.cue(name),npcAway:()=>v3.away() });
+  progress:()=>progress,bindings:()=>progress.settings.bindings,menu:()=>screen==='menu',cue:name=>audio.cue(name),npcAway:()=>v3.away(),
+  npcCall:(id,near)=>id==='talisson'?talissonCall(progress,near):id==='luiz'||id==='indo'?guestCall(progress,id):null,
+  npcHappy:id=>id==='talisson'?progress.v3.facts.includes('finished'):id==='luiz'||id==='indo'?guestStage(progress,id)==='done':false });
 new Phaser.Game({ type: Phaser.AUTO, width: 960, height: 540, parent: 'world', backgroundColor: '#101923', pixelArt: true, roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }, render: { antialias: false },
   scene: officeScene });
@@ -336,7 +358,7 @@ const v3=new V3Controller({
  progress:()=>progress,persist,modal,office,travel,firstMessage:()=>message(0),oldLessons:lessonList,
  replaceSave:next=>{progress=next;started=true;saved=structuredClone(next);drafts.clear();applySettings();officeScene.home(false);officeScene.switchRoom(progress.room);persist();office();},
  react:mood=>officeScene.react(mood),frame:(id,frame)=>officeScene.showSimulation(id,frame),
- conversation:html=>{screen='dialogue-world';$('#overlay').className='world-dialogue-overlay';$('#overlay').innerHTML='<section class="panel world-dialogue" role="dialog" aria-labelledby="dialog-title">'+html+'</section>';$('#hud').inert=false;queueMicrotask(()=>document.querySelector<HTMLElement>('#overlay button')?.focus({preventScroll:true}));},
+ conversation:(html,side)=>{screen='dialogue-world';$('#overlay').className='world-dialogue-overlay';$('#overlay').innerHTML='<section class="panel world-dialogue '+side+'" role="dialog" aria-labelledby="dialog-title">'+html+'</section>';$('#hud').inert=false;queueMicrotask(()=>document.querySelector<HTMLElement>('#overlay button')?.focus({preventScroll:true}));},
  world:html=>{screen='world-simulation';$('#overlay').className='world-simulation-overlay';$('#overlay').innerHTML=html;$('#hud').inert=true;},
  reward:rewardNotice,audio:name=>audio.cue(name),refreshWorld:()=>officeScene.invalidate(),
 });

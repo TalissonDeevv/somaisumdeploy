@@ -32,6 +32,44 @@ export function activityRequirement(p:Progress,id:ActivityId){
  if(id==='circuit'&&p.current<2&&!p.lessonCompleted.includes('l3'))return 'Demonstre condições na missão 2 ou na lição “E, OU e parênteses”.';
  return '';
 }
+export type TalissonStage='rule'|'observe'|'clues'|'trace'|'fix'|'present'|'explain'|'finish'|'done';
+export function talissonStage(p:Progress):TalissonStage{
+ const f=p.v3.facts;
+ if(f.includes('finished'))return 'done';
+ if(!f.includes('rule'))return 'rule';
+ if(!f.includes('observed'))return 'observe';
+ if(!f.includes('log')||!f.includes('note'))return 'clues';
+ if(!f.includes('hypothesis'))return 'trace';
+ if(!f.includes('corrected'))return 'fix';
+ if(!f.includes('presented'))return 'present';
+ if(!f.includes('explained'))return 'explain';
+ return 'finish';
+}
+// Talisson calls Byte back when the talk was left paused, or when the next step is his.
+export function talissonCall(p:Progress,near=false):string|null{
+ const stage=talissonStage(p);
+ if(stage==='done'||p.v3.opening==='new')return null;
+ const hisTurn=['rule','observe','present','explain','finish'].includes(stage);
+ if(!p.v3.dialoguePaused&&!hisTurn)return null;
+ if(near)return 'Isso! Vem cá!';
+ return {rule:'Vem ouvir a regra!',observe:'Falta ver a falha!',clues:'E as pistas?',trace:'Falta provar a causa!',fix:'Falta corrigir o ID!',present:'Falta apresentar!',explain:'Me explica a correção!',finish:'Vamos encerrar!'}[stage];
+}
+export type GuestId='luiz'|'indo';
+export const guestActivity:Record<GuestId,ActivityId>={luiz:'orders',indo:'budget'};
+export const guestFlags=(p:Progress,id:GuestId)=>new Set(((p.v3.results as Record<string,string|undefined>)['guest-'+id]??'').split('|').filter(Boolean));
+export function setGuestFlag(p:Progress,id:GuestId,flag:string){const flags=guestFlags(p,id);flags.add(flag);(p.v3.results as Record<string,string|undefined>)['guest-'+id]=[...flags].join('|');}
+export type GuestStage='start'|'progress'|'ready'|'done';
+export function guestStage(p:Progress,id:GuestId):GuestStage{
+ const solved=p.v3.activityCompleted.includes(guestActivity[id]),flags=guestFlags(p,id);
+ if(solved)return flags.has('finished')?'done':'ready';
+ return flags.has('met')?'progress':'start';
+}
+export function guestCall(p:Progress,id:GuestId):string|null{
+ const stage=guestStage(p,id);
+ if(stage==='start')return id==='luiz'?'Byte! Olha isso!':'Me ajuda aqui?';
+ if(stage==='ready')return id==='luiz'?'Última rodada?':'Vamos apresentar?';
+ return null;
+}
 export function chapterObjective(p:Progress){
  const f=p.v3.facts;
  if(!f.includes('met'))return 'Visite a demonstração da feira e converse com Talisson.';

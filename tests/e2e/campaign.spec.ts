@@ -82,7 +82,7 @@ test('campanha completa com movimento, falhas, dicas, save, final e revisita', a
 });
 test('save corrompido, configurações e confirmação de novo jogo', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('so-mais-um-deploy.v1', '{invalido'));
-  await page.goto('/'); await expect(page.locator('#overlay').getByText(/Save inválido/)).toBeVisible(); await expect(page.locator('[data-action="continue"]')).toBeDisabled();
+  await page.goto('/'); await expect(page.locator('#overlay').getByText(/Save inválido/)).toBeVisible(); await expect(page.locator('[data-action="continue"]')).toHaveCount(0);
   await click(page, 'new'); await click(page,'v3-choice-0'); await click(page,'v3-choice-0'); await page.keyboard.press('e'); await click(page,'v3-opening-up-1'); await click(page,'v3-opening-up-2'); await click(page,'v3-opening-run'); await click(page,'v3-office'); await page.keyboard.press('Escape'); await click(page, 'settings');
   await page.locator('[data-setting="muted"]').check();await click(page,'settings-access');await page.locator('[data-setting="reducedMotion"]').check();
   await page.locator('[data-setting="textSpeed"]').selectOption('instant'); await click(page, 'back-settings'); await click(page, 'menu');

@@ -8,7 +8,7 @@ const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
 const errors = [], network = [];
 let app;
 async function launch() {
-  app = await electron.launch({ executablePath, args: [`--user-data-dir=${profile}`], env });
+  app = await electron.launch({ executablePath, args: [`--user-data-dir=${profile}`, ...(process.env.SMOKE_DISABLE_GPU ? ['--disable-gpu'] : [])], env });
   const page = await app.firstWindow(); page.on('pageerror', e => errors.push(e.message)); page.on('request', req => { if (/^https?:/.test(req.url())) network.push(req.url()); });
   await page.waitForLoadState('load'); return page;
 }
@@ -22,7 +22,10 @@ async function launch() {
   expect(prefs).toEqual({ contextIsolation: true, nodeIntegration: false, sandbox: true });
   expect(await page.evaluate(() => typeof window.require)).toBe('undefined');
   await page.screenshot({ path: 'test-results/desktop-menu.png' });
-  await page.locator('[data-action="new"]').click(); await page.locator('[data-action="office"]').click();
+  await page.locator('[data-action="new"]').click();
+  // A new journey opens with Talisson's intro and the office panel before the first mission.
+  await page.locator('[data-action="v3-choice-0"]').click(); await page.locator('[data-action="v3-choice-0"]').click();
+  await page.keyboard.press('e'); await page.locator('[data-action="v3-opening-up-1"]').click(); await page.locator('[data-action="v3-opening-up-2"]').click(); await page.locator('[data-action="v3-opening-run"]').click(); await page.locator('[data-action="v3-office"]').click();
   await expect(page.locator('#interaction')).toContainText('Computador'); await page.keyboard.press('e');
   await page.locator('[data-action="open-challenge"]').click();
   for (const action of ['up-2', 'up-1', 'up-2', 'up-3', 'up-4', 'run']) await page.locator(`[data-action="${action}"]`).click();
@@ -38,13 +41,13 @@ async function launch() {
     let at=(await page.locator('.code-block').allTextContents()).findIndex(t=>t.includes(label));while(at>index){await click(`up-${at}`);at--;}
   }
   await click('run');await expect(page.getByText('✓ Testes passaram')).toBeVisible();await click('deliver');await click('office');
-  await page.keyboard.press('m');await page.locator('[data-action="room-1"]').click();await expect(page.locator('.room-caption')).toContainText('OFICINA');await expect(page.locator('.xp-widget')).toContainText('230 XP');
+  await page.keyboard.press('m');await page.locator('[data-action="room-1"]').click();await expect(page.locator('.room-caption')).toContainText('OFICINA');await expect(page.locator('.xp-widget')).toContainText('270 XP');
   await page.screenshot({ path: 'test-results/desktop-office.png' });
   await app.close(); app = null;
   page = await launch(); await page.locator('[data-action="continue"]').click();
   await expect(page.locator('.mission-status')).toContainText('Entrou quem não devia');
-  await expect(page.locator('.room-caption')).toContainText('OFICINA');await expect(page.locator('.xp-widget')).toContainText('230 XP');
+  await expect(page.locator('.room-caption')).toContainText('OFICINA');await expect(page.locator('.xp-widget')).toContainText('270 XP');
   expect(errors).toEqual([]); expect(network).toEqual([]);
-  const report = { result: 'passed', executablePath, profile, checks: ['Local file loading', 'Isolated sandbox / no renderer Node', 'Logo and procedural Byte rig', 'Office interaction', 'Mission 1 blocks and tests', 'Delivery unlocks mission 2', 'Two lessons and one extra experiment', '230 XP unlocks workshop', 'Room and progress survive application relaunch', 'No HTTP requests'], errors, network };
+  const report = { result: 'passed', executablePath, profile, checks: ['Local file loading', 'Isolated sandbox / no renderer Node', 'Logo and procedural Byte rig', 'Office interaction', 'Mission 1 blocks and tests', 'Delivery unlocks mission 2', 'Two lessons and one extra experiment', '270 XP unlocks workshop', 'Room and progress survive application relaunch', 'No HTTP requests'], errors, network };
   fs.writeFileSync('test-results/desktop-report.json', JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2));
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { if (app) await app.close(); });

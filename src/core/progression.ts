@@ -9,7 +9,7 @@ export const rooms = [
   { id:1,level:3,name:'Oficina de protótipos',label:'02 / Ideias em blocos',description:'Bancadas, peças e experimentos de lógica booleana.',accent:'#87ccc7' },
   { id:2,level:5,name:'Sala dos servidores',label:'03 / Entre os racks',description:'Monitore execuções e domine laços e limites.',accent:'#96b7ef' },
   { id:3,level:8,name:'Terraço de projetos',label:'04 / Novos horizontes',description:'Um espaço aberto para investigar dados e celebrar entregas.',accent:'#c4b5e5' },
-  { id:4,level:1,name:'Feira Conecta',label:'05 / A cidade participa',description:'Robô de entregas, catraca e participantes: seu código em funcionamento.',accent:'#e3bc78' },
+  { id:4,level:1,name:'Feira Conecta',label:'05 / A cidade participa',description:'Robô de entregas, catraca, a praça de alimentação de Luiz e o projeto de Indo Ali.',accent:'#e3bc78' },
   { id:5,level:1,name:'Demonstração de Talisson',label:'06 / O bug da apresentação',description:'Converse, investigue o buffer e corrija a causa dos reenvios.',accent:'#8bc8cf' },
 ];
 export function xpFor(p: Progress) { return p.completed.reduce((sum,id) => sum + campaignXP[id],0) + p.practiceCompleted.reduce((sum,id) => sum + (practices.find(t => t.id === id)?.xp ?? 0),0) + p.lessonCompleted.length * 35+expansionXP(p); }

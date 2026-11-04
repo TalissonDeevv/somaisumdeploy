@@ -1,4 +1,5 @@
-import type { ActivityProgram, ActivityRun, DemoEvent, DataProgram, Person, SimFrame, ServiceCommand, CircuitProgram, NodeId } from './types';
+import type { ActivityProgram, ActivityRun, BudgetProgram, BudgetRow, DemoEvent, DataProgram, OrderEvent, OrdersProgram, Person, PriceConversion, SimFrame, ServiceCommand, CircuitProgram, NodeId } from './types';
+import { orderEventIds } from './types';
 export const DEMO_EVENTS:DemoEvent[]=['A17','B28','reconnect','retryA','retryB'];
 export const people:Record<string,Person>={A17:{id:'A17',name:'Ana',email:'ana@local'},B28:{id:'B28',name:'Ana',email:'palestra@local'},retryA:{id:'A17',name:'Ana',email:'ana.novo@local'},retryB:{id:'B28',name:'Ana',email:'palestra@local'}};
 export function validActivityProgram(value:unknown):value is ActivityProgram{
@@ -9,6 +10,8 @@ export function validActivityProgram(value:unknown):value is ActivityProgram{
  if(p.kind==='debug')return Number.isInteger(p.capacity)&&Number(p.capacity)>=0&&Number(p.capacity)<=6&&['>','>='].includes(String(p.comparison))&&[-1,0,1].includes(Number(p.change))&&typeof p.change==='number'&&Number.isInteger(p.line)&&Number(p.line)>=1&&Number(p.line)<=4;
  if(p.kind==='tests'){const n=p.negative as Record<string,unknown>|undefined;return arr(p.events,16,DEMO_EVENTS)&&!!n&&['ticket','paid','team'].every(k=>typeof n[k]==='boolean');}
  if(p.kind==='data')return ['id','name','email'].includes(String(p.identity))&&['append','upsert','ignore'].includes(String(p.strategy))&&typeof p.persistent==='boolean';
+ if(p.kind==='orders')return arr(p.script,16,orderEventIds)&&['ai','strip','decimal'].includes(String(p.conversion))&&(p.listeners===1||p.listeners===2)&&typeof p.reset==='boolean';
+ if(p.kind==='budget')return [p.telas,p.horas,p.valor].every(n=>Number.isInteger(n)&&Number(n)>=0&&Number(n)<=500)&&typeof p.vague==='boolean'&&(p.protoCount===1||p.protoCount===2)&&['desktop','prototipo'].includes(String(p.desktopCond));
  if(p.kind==='investigation')return Array.isArray(p.evidence)&&p.evidence.length<=6&&new Set(p.evidence).size===p.evidence.length&&p.evidence.every(x=>Number.isInteger(x)&&x>=0&&x<=5)&&['cache','network','name'].includes(String(p.hypothesis));
  return false;
 }
@@ -28,6 +31,91 @@ export function demoFrames(events:DemoEvent[],program:DataProgram):SimFrame[]{
   frames.push(frame(source+' → salvarInscrição('+record.id+')',{evento:event,cache:[...cache].join(', '),registros:bank.length},{records:structuredClone(bank),failure:duplicate,output:[duplicate?'ID duplicado no banco':found<0?'Registro incluído':'Registro encontrado']}));
  }
  return frames;
+}
+export const menuItems:Record<'cafe'|'pao',{name:string;price:string;value:number}>={cafe:{name:'Café',price:'1,00',value:1},pao:{name:'Pão de queijo',price:'3,50',value:3.5}};
+export const money=(n:number)=>'R$ '+n.toFixed(2).replace('.',',');
+export function convertPrice(text:string,conversion:PriceConversion):number{
+ if(conversion==='ai')return Number(text)||0; // "1,00" is NaN, and || 0 silently turns it into free coffee.
+ if(conversion==='strip')return Number(text.replace(',',''));
+ return Number(text.replace(',','.'));
+}
+function orderFrames(script:OrderEvent[],program:OrdersProgram):{frames:SimFrame[];diverged:boolean}{
+ let total=0,expected=0,items:string[]=[],wanted:string[]=[],diverged=false;const counter:{id:number;itens:string;total:string}[]=[];
+ const state=(evento:string,extra:Record<string,string|number>={})=>({evento,...extra,total:money(total),esperado:money(expected),itens:items.length});
+ const frames:SimFrame[]=[frame('Terminal pronto. O total começa em '+money(0)+'.',state('início'),{counter:[],line:0})];
+ const push=(label:string,vars:SimFrame['vars'],line:number)=>{const failure=Math.abs(total-expected)>1e-9||items.length!==wanted.length;diverged=diverged||failure;frames.push(frame(label,vars,{line,failure,counter:structuredClone(counter)}));};
+ for(const event of script){
+  if(event==='cafe'||event==='pao'){
+   const item=menuItems[event];expected+=item.value;wanted.push(item.name);
+   for(let fire=1;fire<=program.listeners;fire++){
+    const value=convertPrice(item.price,program.conversion);total+=value;items.push(item.name);
+    push(fire===1?'Clique em Pedir '+item.name+': preço "'+item.price+'" virou '+value:'O mesmo clique disparou de novo: '+item.name+' entrou duas vezes.',state('pedir '+item.name,{preco:'"'+item.price+'" (texto)',convertido:value}),fire===1?1:2);
+   }
+  }else if(event==='pay'){
+   counter.push({id:counter.length+1,itens:items.join(', ')||'vazio',total:money(total)});
+   push('Pedido enviado ao balcão: '+money(total)+'.',state('pagar'),3);
+  }else{
+   expected=0;wanted=[];if(program.reset){total=0;items=[];}
+   push(program.reset?'Nova compra: carrinho e total zerados.':'Nova compra: o total anterior continuou acumulado.',state('nova compra'),4);
+  }
+ }
+ return {frames,diverged};
+}
+export const ORDER_CHECK:OrderEvent[]=['cafe','cafe','pay','new','pao','pay'];
+function runOrders(program:OrdersProgram):ActivityRun{
+ const {frames,diverged}=orderFrames(program.script,program),check=orderFrames(ORDER_CHECK,program);
+ const s=program.script,lastNew=s.lastIndexOf('new'),before=s.slice(0,Math.max(lastNew,0)),after=lastNew<0?[]:s.slice(lastNew+1);
+ const ordered=(list:OrderEvent[])=>list.some(e=>e==='cafe'||e==='pao');
+ const coverage=lastNew>=0&&ordered(before)&&before.includes('pay')&&ordered(after)&&after.includes('pay');
+ const correct=program.conversion==='decimal'&&program.listeners===1&&program.reset&&!check.diverged;
+ const passed=correct&&coverage&&!diverged;
+ const last=frames.at(-1);frames.push(frame(passed?'Rodada conferida: o balcão recebeu os valores certos.':'Resultado do roteiro: compare obtido e esperado.',{...last?.vars,evento:'fim'},{line:0,failure:!passed&&diverged,counter:last?.counter??[]}));
+ const hit200=frames.some(f=>f.vars.total==='R$ 200,00');
+ const feedback=passed?'Conversão correta, um evento por clique e estado zerado na nova compra. O roteiro testou além do primeiro exemplo e o balcão recebeu tudo certo.':
+  program.conversion==='ai'?'O café está saindo de graça. Number("1,00") dá NaN e o || 0 transforma isso em zero sem avisar ninguém. Revise a conversão do preço.':
+  program.conversion==='strip'?'Tirar a vírgula transforma R$ 1,00 em 100. O preço precisa virar 1. Revise a conversão.':
+  program.listeners===2?'O preço está certo, mas um clique registra o pedido duas vezes. Veja o passo “disparou de novo” e revise o botão.':
+  !program.reset?'Os valores estão certos, mas a nova compra pode herdar o total anterior. Teste uma nova compra e revise o estado.':
+  !coverage?'O código parece certo, mas seu roteiro ainda não prova isso. Teste pedir, pagar, abrir uma nova compra, pedir de novo e pagar.':
+  'Ainda há divergência entre obtido e esperado. Avance passo a passo até a primeira diferença.';
+ const comment=passed?'Luiz · Espera, então funcionou porque a gente entendeu, e não porque eu pedi com jeitinho?':
+  hit200?'Luiz · OLHA OS DUZENTOS REAIS! Foi exatamente isso. Ainda bem que agora dá para ver de onde veio.':
+  program.conversion==='ai'?'Luiz · Esse é o conserto da IA. Ela disse que estava pronto. Por que o erro não aparece em lugar nenhum?':
+  program.conversion==='strip'?'Luiz · Mas sem a vírgula não fica mais limpo? Ah. Cem reais o café. Entendi.':
+  program.listeners===2?'Luiz · Mas eu só cliquei uma vez! Será que tem dois lugares ouvindo o mesmo botão?':
+  !program.reset?'Luiz · Então o cliente novo paga o café do anterior? Isso explica a reclamação de ontem.':
+  'Luiz · Na primeira demonstração também funcionou. O que mais a gente pode testar?';
+ return {frames,passed,feedback,comment,optional:[],instructions:Math.max(1,program.script.length)};
+}
+export const BUDGET_SCENARIOS=[{cenario:'Só aplicativo',desktop:false,prototipo:false},{cenario:'App + desktop',desktop:true,prototipo:false},{cenario:'App + protótipo',desktop:false,prototipo:true},{cenario:'App + desktop + protótipo',desktop:true,prototipo:true}];
+const BRIEF={telas:6,horas:4,valor:50};
+const budgetTotal=(p:BudgetProgram,desktop:boolean,prototipo:boolean)=>{
+ const base=p.telas*p.horas*p.valor,addDesktop=(p.desktopCond==='desktop'?desktop:prototipo)?p.telas*2*p.valor:0,addProto=prototipo?8*p.valor*p.protoCount:0,addVague=p.vague?999:0;
+ return {base,addDesktop,addProto,addVague,total:base+addDesktop+addProto+addVague};
+};
+const breakdown=(b:ReturnType<typeof budgetTotal>):[string,string][]=>[['Base das telas',money(b.base)],['Versão desktop',money(b.addDesktop)],['Protótipo navegável',money(b.addProto)],...(b.addVague?[['Botão que faz tudo (chute)',money(b.addVague)] as [string,string]]:[])];
+function runBudget(program:BudgetProgram):ActivityRun{
+ const right:BudgetProgram={kind:'budget',...BRIEF,vague:false,protoCount:1,desktopCond:'desktop'},rows:BudgetRow[]=[];
+ const frames=[frame('Variáveis lidas: '+program.telas+' tela(s), '+program.horas+' h por tela, '+money(program.valor)+' por hora.',{telas:program.telas,horas:program.horas,valor:money(program.valor)},{budget:[],line:1})];
+ for(const s of BUDGET_SCENARIOS){
+  const got=budgetTotal(program,s.desktop,s.prototipo),want=budgetTotal(right,s.desktop,s.prototipo).total;
+  rows.push({cenario:s.cenario,esperado:want,obtido:got.total});
+  frames.push(frame(s.cenario+': '+money(got.total)+(got.total===want?' ✓':' · esperado '+money(want)),{desktop:s.desktop?'sim':'não',prototipo:s.prototipo?'sim':'não',base:money(got.base),'+desktop':money(got.addDesktop),'+protótipo':money(got.addProto),total:money(got.total)},{budget:structuredClone(rows),failure:got.total!==want,line:s.desktop?3:2,breakdown:breakdown(got)}));
+ }
+ const passed=rows.every(r=>r.esperado===r.obtido),full=budgetTotal(program,true,true);
+ frames.push(frame(passed?'Painel do projeto organizado: proposta pronta.':'Revise as linhas com diferença.',{total:money(full.total)},{budget:structuredClone(rows),failure:!passed,breakdown:breakdown(full)}));
+ const scope=program.telas===BRIEF.telas&&program.horas===BRIEF.horas&&program.valor===BRIEF.valor;
+ const feedback=passed?'As quatro combinações batem. Cada serviço entra uma vez, a condição testa a variável certa e o pedido sem definição virou pergunta para o cliente.':
+  !scope?'As variáveis ainda não refletem o briefing. Releia as mensagens: quantas telas foram citadas? Quantas horas e qual valor a Indo anotou?':
+  program.vague?'“Um botão que faz tudo” não tem definição, então qualquer preço é chute. Tire da conta e devolva como pergunta para o cliente.':
+  program.protoCount===2?'O protótipo está sendo cobrado duas vezes: compare “App + protótipo” com o esperado.':
+  'Ligar o desktop não muda o total do jeito certo. Veja qual variável a condição está testando.';
+ const comment=passed?'Indo · Agora, quando aparecer “mais uma coisinha”, eu mostro quanto ela custa.':
+  !scope?'Indo · Ele disse “uma telinha”, mas conta comigo as telas que ele citou nas mensagens…':
+  program.vague?'Indo · O que esse botão faz? Se nem o cliente sabe, como eu cobro?':
+  program.protoCount===2?'Indo · Duas vezes o protótipo? Se eu mando assim, perco o cliente. Ou o juízo.':
+  'Indo · Marquei desktop e o número nem se mexeu. Mas marquei só protótipo e o desktop entrou na conta. Estranho, né?';
+ return {frames,passed,feedback,comment,optional:[],instructions:6};
 }
 function runData(program:DataProgram):ActivityRun{
  const frames=demoFrames(DEMO_EVENTS,program),actual=frames.at(-1)?.records??[];
@@ -77,6 +165,8 @@ function runCircuit(program:CircuitProgram,variant:number):ActivityRun{
 }
 export function runActivity(program:ActivityProgram,variant=0):ActivityRun{
  if(!validActivityProgram(program)||![0,1].includes(variant))return {frames:[frame('Entrada inválida. Use os blocos e parâmetros conhecidos.',{},{failure:true})],passed:false,feedback:'A entrada foi recusada pelo interpretador limitado.',optional:[],instructions:0};
+ if(program.kind==='orders')return runOrders(program);
+ if(program.kind==='budget')return runBudget(program);
  if(program.kind==='route')return runRoute(program,variant);
  if(program.kind==='circuit')return runCircuit(program,variant);
  if(program.kind==='data')return runData(program);

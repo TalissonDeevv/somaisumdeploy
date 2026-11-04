@@ -12,15 +12,11 @@ Logo e personagem fornecidos por Talisson Souza. O ambiente é desenhado procedu
 - O pacote não possui assinatura digital. O ícone do executável ainda é o padrão do Electron; a logo e o personagem enviados estão integrados ao jogo.
 - Isso é uma base desktop funcional, sem integração Steam ou alegação de aprovação/publicação comercial.
 
-Diretório de trabalho atual: `C:\Users\Pichau\Desktop\Só mais um deploy - Projeto Game\Código`.
-O projeto completo foi movido para esta pasta a pedido de Talisson Souza. Código, dependências, artes, builds, testes e documentos acompanham o projeto.
-
 ## Desenvolvimento e versão web
 
-Requer Node.js 22.12+ e npm. As dependências já estão instaladas neste computador. Para reproduzir a instalação, utilize o lockfile:
+Requer Node.js 22.12+ e npm. Para instalar, utilize o lockfile:
 
 ```powershell
-cd "C:\Users\Pichau\Desktop\Só mais um deploy - Projeto Game\Código"
 npm ci
 npm run dev
 ```
@@ -42,6 +38,12 @@ Acesse `http://127.0.0.1:5173`. Também há `INICIAR_WEB.cmd` para iniciar o ser
 | `npm run desktop:dist` | Gera instalador NSIS para Windows x64 |
 
 A primeira instalação e o empacotamento podem baixar ferramentas. **Depois de instalado, o jogo desktop funciona offline.** A versão web não contém dependências remotas; sirva `dist/` por HTTP local ou hospedagem estática. Não abra `dist/index.html` diretamente com `file://`, pois módulos ES dos navegadores exigem HTTP. O Electron oferece o carregamento local apropriado. A versão web não instala service worker nem promete cache para visitas futuras sem servidor.
+
+## Publicar na Vercel
+
+O `vercel.json` já traz a configuração: a Vercel instala sem baixar o Electron, roda `npm run build` e publica `dist/`. Basta importar este repositório na Vercel, sem variáveis obrigatórias. Cada envio para `main` publica de novo.
+
+A imagem, o título e a descrição do link ficam no `index.html`. A URL absoluta da imagem usa o domínio de produção da Vercel durante o build. Para um domínio próprio, defina a variável `SITE_URL` (exemplo: `https://jogo.exemplo.com`) e publique novamente.
 
 ## Como jogar
 
@@ -76,6 +78,16 @@ As oito lições cobrem sequência, algoritmos, E/OU, casos negativos, laços, l
 
 Os doze experimentos trazem café por dependências, build de um site, backup seguro, revisão e testes, alarme, fila expressa, índices do zero, incrementos de dois e três, homônimos, e-mail compartilhado e reenvios. As regras são avaliadas pelo comportamento; soluções alternativas válidas passam.
 
+## Personagens e novas missões
+
+Todos os personagens humanos usam o mesmo modelo blocado de 16 × 29 pixels, definido em `src/game/CharacterPixels.ts`. A galeria, os diálogos e o cenário mostram o mesmo sprite. A aba **Personagens**, na home e na pausa, apresenta Byte, Talisson, Luiz Dela, Indo Ali, Lia, Rafa e Noa.
+
+- **Talisson:** a conversa acompanha cada etapa da tarefa e sempre oferece o próximo passo. Sair de perto pausa a conversa e ele mostra um balão acenando. Na volta, ele chama a atenção do Byte e aponta o que falta. Aceitar uma tarefa não conta como pausa.
+- **Luiz Dela, “Mas a IA disse que estava pronto” (Feira Conecta, 130 XP):** roteiro de pedidos no terminal, conversão de preço, ouvintes do botão e estado da nova compra. Só passa com código certo e um roteiro que testa além do primeiro exemplo.
+- **Indo Ali, “É só uma telinha” (Feira Conecta, 130 XP):** briefing, variáveis, condições e quatro combinações de serviços. Os valores são fictícios.
+
+A lição “Texto não é número” (35 XP) prepara a missão do Luiz. O novo total possível é **3.155 XP**.
+
 ## Configurações ampliadas
 
 Três abas: áudio, acessibilidade e jogo. Doze preferências persistentes: volume dos efeitos, silêncio, ambiência procedural, volume da ambiência, velocidade do texto, movimento reduzido, alto contraste, tamanho do texto, velocidade do Byte, marcadores de interação, legenda dos controles e celebrações. Tela cheia é uma ação separada, dependente do suporte do navegador. A ambiência é opcional e desligada por padrão.
@@ -105,6 +117,7 @@ src/
   game/
     OfficeScene.ts    cena Phaser, pixel art, colisões e movimento
     ByteActor.ts      rig de partes articuladas, direção e expressões
+    CharacterPixels.ts  sprites de todos os personagens humanos
     audio.ts          efeitos procedurais opcionais
   main.ts             interface HTML acessível e coordenação do jogo
   style.css           interface responsiva e movimento reduzido

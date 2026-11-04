@@ -2,7 +2,7 @@ import type { Progress, Settings } from './types';
 import { practices, lessons } from './academy';
 import { rooms, levelInfo } from './progression';
 import { defaultBindings, freshV3, validBindings } from '../v3/events';
-import { activityIds, factIds, type V3State } from '../v3/types';
+import { activityIds, factIds, talkNodeIds, type V3State } from '../v3/types';
 export const MAX_SAVE_BYTES=131072;
 export const SAVE_KEY = 'so-mais-um-deploy.v1';
 export const SETTINGS_KEY = 'so-mais-um-deploy.settings.v1';
@@ -16,11 +16,11 @@ function validSettings(s: Settings) {
 }
 function validV3(v:V3State){
  const unique=(a:unknown,allowed:readonly string[])=>Array.isArray(a)&&a.length<=allowed.length&&new Set(a).size===a.length&&a.every(x=>allowed.includes(x));
- if(!v||!['story','lab','challenges'].includes(v.mode)||!['new','done','skipped'].includes(v.opening)||!unique(v.facts,factIds)||!unique(v.activityCompleted,activityIds)||!unique(v.concepts,['variables','lists','functions','events'])||!unique(v.optional,['reusable-route','reusable-data','negative-test'])||!unique(v.hypotheses,['cache','network','name']))return false;
+ if(!v||!['story','lab','challenges'].includes(v.mode)||!['new','done','skipped'].includes(v.opening)||!unique(v.facts,factIds)||!unique(v.activityCompleted,activityIds)||!unique(v.concepts,['variables','lists','functions','events','types'])||!unique(v.optional,['reusable-route','reusable-data','negative-test'])||!unique(v.hypotheses,['cache','network','name']))return false;
  if(!Array.isArray(v.history)||v.history.length>80||!v.history.every(l=>l&&typeof l.speaker==='string'&&l.speaker.length<=40&&typeof l.text==='string'&&l.text.length<=600&&typeof l.node==='string'&&l.node.length<=60))return false;
  if(!v.best||typeof v.best!=='object'||Array.isArray(v.best)||!Object.entries(v.best).every(([id,b])=>activityIds.includes(id as typeof activityIds[number])&&b&&Number.isSafeInteger(b.instructions)&&b.instructions>=0&&b.instructions<=100&&Number.isSafeInteger(b.runs)&&b.runs>=0&&b.runs<=1000000))return false;
- if(!unique(v.invites,['campaign','chapter'])||!v.results||typeof v.results!=='object'||Array.isArray(v.results)||!Object.entries(v.results).every(([id,value])=>activityIds.includes(id as typeof activityIds[number])&&typeof value==='string'&&value.length<=400))return false;
- if(typeof v.dialoguePaused!=='boolean'||!['greeting','intro','intro-demo','intro-panel','intro-invite','rule','network','cache','wrong-explanation','explained','completed','lead-log'].includes(v.dialogueNode))return false;
+ if(!unique(v.invites,['campaign','chapter'])||!v.results||typeof v.results!=='object'||Array.isArray(v.results)||!Object.entries(v.results).every(([id,value])=>(activityIds.includes(id as typeof activityIds[number])||id==='guest-luiz'||id==='guest-indo')&&typeof value==='string'&&value.length<=400))return false;
+ if(typeof v.dialoguePaused!=='boolean'||!(talkNodeIds as readonly string[]).includes(v.dialogueNode))return false;
  const d=v.decor;if(!d||!['left','right','hidden'].includes(d.plant)||!['lamp','certificate','souvenir','gift'].every(k=>typeof d[k as keyof typeof d]==='boolean'))return false;
  const deps:Record<string,string[]>= {observed:['met','rule'],hypothesis:['observed','log','note'],corrected:['hypothesis'],presented:['corrected'],explained:['presented'],finished:['explained']};
  return v.facts.every(f=>(deps[f]??[]).every(required=>v.facts.includes(required as typeof factIds[number])));

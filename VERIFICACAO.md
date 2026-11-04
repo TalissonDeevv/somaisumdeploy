@@ -37,3 +37,9 @@ O teste desktop abriu `release/win-unpacked/Só Mais Um Deploy.exe`, confirmou c
 ## Evidências
 
 Capturas de menu, primeira missão, final, lição, perfil, configurações, quatro salas e pacote desktop ficam em `test-results/`. O PDF em `output/pdf/` reúne a versão implementada e sugestões explicitamente separadas para discussão da equipe.
+
+## Personagens e novas missões (04/11/2026)
+
+- `npm run typecheck` passou; `npm test`: 127 testes passaram.
+- `npm run test:e2e`: 11 de 11 passaram.
+- `SMOKE_DISABLE_GPU=1 npm run test:desktop` passou com renderização por software. Com a GPU, o teste expirou na abertura: outro programa ocupava a GPU em 99%, e o jogo levou de 60 a 80 s para responder (1,4 s sem GPU). A causa não foi confirmada com a GPU livre.

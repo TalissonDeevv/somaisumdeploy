@@ -82,7 +82,7 @@ describe('Diálogos, progressão e compatibilidade',()=>{
   expect(xpFor(p)).toBe(1820);
   for(const c of conceptLessons)emit(p,{type:'concept',concept:c.id});for(const a of activities)emit(p,{type:'activity',id:a.id,instructions:10,runs:1,optional:[]});
   for(const fact of ['met','rule','observed','log','note','hypothesis','corrected','presented','explained','finished'] as const)emit(p,{type:'fact',fact});
-  emit(p,{type:'opening'});expect(xpFor(p)).toBe(2860);expect(levelInfo(p).level).toBe(12);
+  emit(p,{type:'opening'});expect(xpFor(p)).toBe(3155);expect(levelInfo(p).level).toBe(12);
  });
  it('V2 mantém XP, preferências, conquistas e pode ignorar a abertura',()=>{
   const current=freshProgress();completeMission(current,0);finishLesson(current,'l1');

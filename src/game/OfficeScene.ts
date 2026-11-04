@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ByteActor, type ByteMood } from './ByteActor';
-import { drawVenue, TalissonActor, WorldSimulation } from './ExpansionWorld';
+import { drawVenue, NpcActor, WorldSimulation } from './ExpansionWorld';
+import type { CharacterId } from './CharacterPixels';
 import type { Progress } from '../core/types';
 import type { ActivityId, SimFrame, Bindings } from '../v3/types';
 export type ObjectId = string;
@@ -10,7 +11,7 @@ export interface OfficeBridge {
   interact: (id: ObjectId) => void; nearby: (label: string) => void;
   speed: () => number; labels: () => boolean; celebrations: () => boolean;
   progress:()=>Progress;bindings:()=>Bindings;menu:()=>boolean;cue:(name:string)=>void;
-  npcAway:()=>void;
+  npcAway:()=>void;npcCall:(id:CharacterId,near:boolean)=>string|null;npcHappy:(id:CharacterId)=>boolean;
 }
 export class OfficeScene extends Phaser.Scene {
   private keys = new Set<string>();
@@ -21,7 +22,7 @@ export class OfficeScene extends Phaser.Scene {
   private lastLabel = '';
   private roomLayer!: Phaser.GameObjects.Container;
   private room = 0;
-  private talisson?:TalissonActor;private simulation?:WorldSimulation;private live?:Phaser.GameObjects.Graphics;
+  private actors:NpcActor[]=[];private guestTalk?:OfficeObject;private simulation?:WorldSimulation;private live?:Phaser.GameObjects.Graphics;
   private occluders:Phaser.GameObjects.Graphics[]=[];private homeMode=false;private stepDistance=0;private lastIdle=-1;
   private conversationLatch=false;
   private objects: OfficeObject[] = [
@@ -37,6 +38,7 @@ export class OfficeScene extends Phaser.Scene {
   private baseObjects=this.objects.map(o=>({...o}));
   private baseObstacles=this.obstacles.map(r=>Phaser.Geom.Rectangle.Clone(r));
   constructor(private bridge: OfficeBridge) { super('Office'); }
+  placePlayer(x:number,y:number){this.player?.setPosition(x,y);this.keys.clear();}
   resetPosition() { if (this.player) this.player.setPosition(480, 355); this.keys.clear(); this.lastLabel = ''; }
   react(mood: ByteMood) { this.player?.react(mood); }
   showSimulation(id:ActivityId|null,frame:SimFrame|null){this.simulation?.show(id,frame);}
@@ -44,7 +46,9 @@ export class OfficeScene extends Phaser.Scene {
   home(active:boolean){this.homeMode=active;if(!this.player)return;this.cameras.main.setScroll(active?-120:0,0);if(active){this.switchRoom(0);this.player.setPosition(520,338);this.player.face(0,-1);}else this.resetPosition();}
   private interactWith(near:OfficeObject){
     this.player.face(near.x-this.player.x,near.y-this.player.y);
-    this.react(near.id==='talisson'?'talk':near.id==='computer'?'type':near.id==='seat'?'sit':'examine');this.bridge.cue(near.id==='door'?'elevator':'interact');this.bridge.interact(near.id);
+    if(near.id==='talisson')this.actors.find(a=>a.id==='talisson')?.attention(this.time.now);
+    this.guestTalk=near.id==='npc-luiz'||near.id==='npc-indo'?near:undefined;
+    this.react(near.id==='talisson'||near.id.startsWith('npc-')?'talk':near.id==='computer'?'type':near.id==='seat'?'sit':'examine');this.bridge.cue(near.id==='door'?'elevator':'interact');this.bridge.interact(near.id);
   }
   celebrate() {
     if(!this.player||this.bridge.reducedMotion()||!this.bridge.celebrations())return;
@@ -55,7 +59,7 @@ export class OfficeScene extends Phaser.Scene {
   }
   switchRoom(id: number) {
     this.room=id; if(!this.roomLayer)return;
-    this.talisson?.destroy();this.talisson=undefined;this.occluders.forEach(r=>r.destroy());this.occluders=[];
+    this.actors.forEach(a=>a.destroy());this.actors=[];this.guestTalk=undefined;this.occluders.forEach(r=>r.destroy());this.occluders=[];
     this.conversationLatch=false;
     this.objects=this.baseObjects.map(o=>({...o}));this.obstacles=this.baseObstacles.map(r=>Phaser.Geom.Rectangle.Clone(r));
     if(id<4){this.objects.push({id:'seat',name:'Sofá · sentar e respirar',x:320,y:405},{id:'notice',name:'Bilhete de Rafa · examinar',x:182,y:297});}
@@ -63,7 +67,8 @@ export class OfficeScene extends Phaser.Scene {
     this.roomLayer.removeAll(true);this.drawRoom();this.resetPosition();this.upgrades=-1;
     const shelf=this.objects.find(o=>o.id==='shelf');if(shelf)shelf.name='Estante · lições da Lia';
     if(id===0)this.objects.find(o=>o.id==='window')!.name='Janela · lá fora';
-    if(id===0||id===5)this.talisson=new TalissonActor(this,id===0?650:655,id===0?330:355);
+    if(id===0||id===5)this.actors.push(new NpcActor(this,'talisson',id===0?650:655,id===0?330:355));
+    if(id===4)this.actors.push(new NpcActor(this,'luiz',310,400),new NpcActor(this,'indo',590,395),new NpcActor(this,'noa',450,440));
     // Native front edges share world coordinates. Capturing the whole room into
     // render textures here duplicated furniture when the menu camera moved.
     const fronts=id===0?[[378,269,210,7,280,0x795d49],[150,228,93,8,238,0x765d4f],[153,410,132,7,418,0x496776]]:
@@ -227,8 +232,10 @@ export class OfficeScene extends Phaser.Scene {
     return !plant && x > 122 && x < 820 && y > 220 && y < 461 && !this.obstacles.some(r => r.contains(x, y) || r.contains(x - 12, y) || r.contains(x + 12, y));
   }
   update(time: number, delta: number) {
-    const npcDistance=this.talisson&&this.player?Phaser.Math.Distance.Between(this.player.x,this.player.y,this.talisson.x,this.talisson.y):9999;
-    this.talisson?.updatePose(time,this.bridge.reducedMotion(),this.bridge.progress().v3.facts.includes('finished'),this.bridge.progress().v3.dialoguePaused&&npcDistance>80);
+    for(const actor of this.actors){
+      const away=this.player?Phaser.Math.Distance.Between(this.player.x,this.player.y,actor.x,actor.y):9999;
+      actor.updatePose(time,this.bridge.reducedMotion(),this.bridge.npcHappy(actor.id),!this.homeMode&&away>80?this.bridge.npcCall(actor.id,away<170):null);
+    }
     this.live?.clear();
     if(this.room===0&&this.live){const on=this.bridge.progress().v3.opening!=='new';this.live.fillStyle(on?0x74b2bf:0x0d2032).fillRect(435,195,64,35);if(on){this.live.fillStyle(0xe3c081).fillRect(441,210,25,2);this.live.fillStyle(0x8ebfca).fillRect(441,218,this.bridge.reducedMotion()?40:32+Math.floor(time/2000)%3*5,2);}}
     const completed = this.bridge.completed(); if (this.upgrades !== completed) { this.upgrades = completed; this.drawUpgrades(); }
@@ -246,6 +253,7 @@ export class OfficeScene extends Phaser.Scene {
     this.player.setDepth(this.player.y); this.player.animate(time,dx,dy,this.bridge.reducedMotion(),this.bridge.celebrations(),distance);
     this.game.canvas.dataset.byteDirection=this.player.getData('direction');this.game.canvas.dataset.byteWalking=String(distance>0);
     const near = this.nearest(), label = near?.name ?? '';
+    if(this.guestTalk&&Phaser.Math.Distance.Between(this.player.x,this.player.y,this.guestTalk.x,this.guestTalk.y)>108){this.guestTalk=undefined;this.bridge.npcAway();}
     const npc=this.objects.find(o=>o.id==='talisson');
     if(npc){
       const distance=Phaser.Math.Distance.Between(this.player.x,this.player.y,npc.x,npc.y);

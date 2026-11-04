@@ -22,7 +22,7 @@ test('V3 integrada: abertura, proximidade, capítulo e seis formatos com consequ
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('so-mais-um-deploy.v1')!).v3.dialoguePaused)).toBe(true);
  await page.screenshot({path:'test-results/v3-byte-left-1280.png'});
  await hold(page,'d',1000);await expect(page.locator('#dialog-title')).toHaveText('Talisson Souza');
- await page.getByRole('button',{name:'Relembrar a regra da tarefa',exact:true}).click();await click(page,'v3-choice-0');
+ await page.getByRole('button',{name:'Qual é o comportamento esperado?',exact:true}).click();await click(page,'v3-choice-0');
  await page.getByRole('button',{name:'Observar a demonstração com falha',exact:true}).click();await click(page,'v3-skip');
  await expect(page.locator('.records-view .duplicate')).not.toHaveCount(0);await click(page,'v3-world');await page.screenshot({path:'test-results/v3-demo-bug-world-1280.png'});await page.keyboard.press('Escape');
  await page.keyboard.press('m');await click(page,'room-5');
@@ -71,7 +71,7 @@ test('save V2, arquivos inválidos, confirmação, exportação e controles sem 
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('so-mais-um-deploy.v1')!).current)).toBe(0);
  await page.locator('#v3-import').setInputFiles(file);await click(page,'v3-import-confirm');await expect(page.locator('.mission-status')).toContainText('O loop infinito');
  await expect(page.locator('body')).toHaveClass('reduced-motion high-contrast');await expect(page.locator('.xp-widget')).toContainText('240 XP');
- await click(page,'v3-controls');await click(page,'v3-remap-interact');await page.keyboard.press('w');await expect(page.locator('[role="status"]').last()).toContainText('já controla Cima');await page.keyboard.press('f');
+ await click(page,'v3-controls');await click(page,'v3-remap-interact');await page.keyboard.press('w');await expect(page.locator('#overlay [role="status"]').last()).toContainText('já controla Cima');await page.keyboard.press('f');
  await click(page,'v3-office');await page.keyboard.press('e');await expect(page.locator('#overlay')).toBeEmpty();await page.keyboard.press('f');await expect(page.locator('#dialog-title')).toHaveText('O loop infinito');await page.keyboard.press('Escape');
  await page.reload();await click(page,'continue');await expect(page.locator('.key-guide')).toContainText('F');await click(page,'v3-controls');await click(page,'v3-restore-controls');await click(page,'v3-office');
  await page.keyboard.press('Escape');await click(page,'v3-saves');const downloadPromise=page.waitForEvent('download');await click(page,'v3-export');const download=await downloadPromise;expect(download.suggestedFilename()).toBe('byte-save-v3.json');
